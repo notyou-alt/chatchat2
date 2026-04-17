@@ -12,6 +12,7 @@ import cheerful from "./assets/cheerful.webp";
 import shy from "./assets/shy.webp";
 import angry from "./assets/angry.webp";
 import thinking from "./assets/thinking.webp";
+import greeting from "./assets/greeting.webp";
 
 function App() {
   const [message, setMessage] = useState("");
@@ -23,7 +24,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
 
-  const emotionMap = { happy, neutral, serious, cheerful, shy, angry };
+  const emotionMap = { happy, neutral, serious, cheerful, shy, angry, greeting };
 
   const sendMessage = async () => {
     if (!message.trim() || isThinking) return;
