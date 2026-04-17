@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
-import API_BASE_URL from "./config/api"; // <-- import base URL
+import API_BASE_URL from "./config/api";
 import "./admin.css";
 
 function Admin() {
@@ -11,12 +11,14 @@ function Admin() {
   const [intents, setIntents] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [logs, setLogs] = useState([]);
+  const [badWords, setBadWords] = useState([]); // <-- NEW
   const [expandedCats, setExpandedCats] = useState({});
   const [expandedIntents, setExpandedIntents] = useState({});
   const [modal, setModal] = useState({ open: false, type: null, mode: null, data: null });
   const [formCat, setFormCat] = useState({ name: "" });
   const [formIntent, setFormIntent] = useState({ category_id: "", name: "", response: "", emotion: "neutral" });
   const [formQuestion, setFormQuestion] = useState({ intent_id: "", question: "" });
+  const [formBadWord, setFormBadWord] = useState({ word: "" }); // <-- NEW
   
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState("");
@@ -35,16 +37,18 @@ function Admin() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [l, c, i, q] = await Promise.all([
+      const [l, c, i, q, bw] = await Promise.all([
         axios.get(`${API_BASE_URL}/admin/logs`),
         axios.get(`${API_BASE_URL}/admin/categories`),
         axios.get(`${API_BASE_URL}/admin/intents`),
         axios.get(`${API_BASE_URL}/admin/questions`),
+        axios.get(`${API_BASE_URL}/admin/bad-words`), // <-- NEW
       ]);
       setLogs(l.data);
       setCategories(c.data);
       setIntents(i.data);
       setQuestions(q.data);
+      setBadWords(bw.data);
     } catch (err) {
       console.error(err);
       showNotification("Gagal mengambil data", true);
@@ -118,6 +122,38 @@ function Admin() {
   };
   const addFromLog = async (logId) => {
     try { await axios.post(`${API_BASE_URL}/admin/add-from-log`, { log_id: logId }); showNotification("Pertanyaan ditambahkan ke intent"); fetchAll(); } catch (err) { showNotification(`Gagal: ${err.response?.data?.error || err.message}`, true); }
+  };
+
+  // ========== BAD WORDS CRUD ==========
+  const addBadWord = async (word) => {
+    if (!word.trim()) return showNotification("Kata tidak boleh kosong", true);
+    try {
+      await axios.post(`${API_BASE_URL}/admin/bad-words`, { word });
+      showNotification("Kata kotor ditambahkan");
+      fetchAll();
+    } catch (err) {
+      showNotification(err.response?.data?.error || err.message, true);
+    }
+  };
+  const updateBadWord = async (id, word) => {
+    if (!word.trim()) return showNotification("Kata tidak boleh kosong", true);
+    try {
+      await axios.put(`${API_BASE_URL}/admin/bad-words/${id}`, { word });
+      showNotification("Kata kotor diperbarui");
+      fetchAll();
+    } catch (err) {
+      showNotification(err.response?.data?.error || err.message, true);
+    }
+  };
+  const deleteBadWord = async (id) => {
+    if (!window.confirm("Hapus kata kotor ini?")) return;
+    try {
+      await axios.delete(`${API_BASE_URL}/admin/bad-words/${id}`);
+      showNotification("Kata kotor dihapus");
+      fetchAll();
+    } catch (err) {
+      showNotification(err.response?.data?.error || err.message, true);
+    }
   };
 
   // ========== EXPORT EXCEL ==========
@@ -255,7 +291,10 @@ function Admin() {
     }); 
     setModal({ open: true, type: "question", mode: "edit", data: question }); 
   };
-  
+  // NEW: Bad word modal handlers
+  const openAddBadWord = () => { setFormBadWord({ word: "" }); setModal({ open: true, type: "badword", mode: "add", data: null }); };
+  const openEditBadWord = (badWord) => { setFormBadWord({ word: badWord.word }); setModal({ open: true, type: "badword", mode: "edit", data: badWord }); };
+
   const handleModalSubmit = () => {
     if (modal.type === "category") {
       if (modal.mode === "add") addCategory(formCat.name);
@@ -266,6 +305,9 @@ function Admin() {
     } else if (modal.type === "question") {
       if (modal.mode === "add") addQuestion(formQuestion);
       else updateQuestion(modal.data.id, formQuestion.intent_id, formQuestion.question);
+    } else if (modal.type === "badword") {
+      if (modal.mode === "add") addBadWord(formBadWord.word);
+      else updateBadWord(modal.data.id, formBadWord.word);
     }
     setModal({ open: false, type: null, mode: null, data: null });
   };
@@ -353,6 +395,41 @@ function Admin() {
     </div>
   );
 
+  // NEW: Render Bad Words table
+  const renderBadWords = () => (
+    <div className="card">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <h3>Daftar Kata Kotor</h3>
+        <button className="btn btn-success" onClick={openAddBadWord}>+ Tambah Kata Kotor</button>
+      </div>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Kata Kotor</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody>
+          {badWords.length === 0 ? (
+            <tr><td colSpan="3" style={{ textAlign: 'center' }}>Belum ada data kata kotor.</td></tr>
+          ) : (
+            badWords.map((bw) => (
+              <tr key={bw.id}>
+                <td>{bw.id}</td>
+                <td>{bw.word}</td>
+                <td>
+                  <button className="btn-icon edit" onClick={() => openEditBadWord(bw)}>✏️ Edit</button>
+                  <button className="btn-icon delete" onClick={() => deleteBadWord(bw.id)}>🗑️ Hapus</button>
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+
   const renderModal = () => {
     if (!modal.open) return null;
     let title = "", content = null;
@@ -361,25 +438,40 @@ function Admin() {
       content = (<><label>Nama Kategori</label><input type="text" value={formCat.name} onChange={(e) => setFormCat({ name: e.target.value })} placeholder="Contoh: Event" /></>);
     } else if (modal.type === "intent") {
       title = modal.mode === "add" ? "Tambah Intent" : "Edit Intent";
-      content = (<><label>Kategori</label><select value={formIntent.category_id} onChange={(e) => setFormIntent({ ...formIntent, category_id: e.target.value })}><option value="">Pilih Kategori</option>{categories.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}</select><label>Nama Intent</label><input type="text" value={formIntent.name} onChange={(e) => setFormIntent({ ...formIntent, name: e.target.value })} placeholder="Contoh: event_date" /><label>Response Bot</label><textarea value={formIntent.response} onChange={(e) => setFormIntent({ ...formIntent, response: e.target.value })} placeholder="Jawaban bot..." rows="3" /><label>Emotion</label><select value={formIntent.emotion} onChange={(e) => setFormIntent({ ...formIntent, emotion: e.target.value })}><option value="neutral">Neutral</option><option value="happy">Happy</option><option value="serious">Serious</option><option value="cheerful">Cheerful</option><option value="shy">Shy</option><option value="angry">Angry</option><option value="greeting">Greeting</option></select></>);
+      content = (<><label>Kategori</label><select value={formIntent.category_id} onChange={(e) => setFormIntent({ ...formIntent, category_id: e.target.value })}><option value="">Pilih Kategori</option>{categories.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}</select><label>Nama Intent</label><input type="text" value={formIntent.name} onChange={(e) => setFormIntent({ ...formIntent, name: e.target.value })} placeholder="Contoh: event_date" /><label>Response Bot</label><textarea value={formIntent.response} onChange={(e) => setFormIntent({ ...formIntent, response: e.target.value })} placeholder="Jawaban bot..." rows="3" /><label>Emotion</label><select value={formIntent.emotion} onChange={(e) => setFormIntent({ ...formIntent, emotion: e.target.value })}><option value="neutral">Neutral</option><option value="happy">Happy</option><option value="serious">Serious</option><option value="cheerful">Cheerful</option><option value="shy">Shy</option><option value="angry">Angry</option></select></>);
     } else if (modal.type === "question") {
       title = modal.mode === "add" ? "Tambah Pertanyaan" : "Edit Pertanyaan";
       content = (<><label>Intent</label><select value={formQuestion.intent_id} onChange={(e) => setFormQuestion({ ...formQuestion, intent_id: e.target.value })}><option value="">Pilih Intent</option>{intents.map((i) => (<option key={i.id} value={i.id}>{i.name}</option>))}</select><label>Pertanyaan</label><textarea value={formQuestion.question} onChange={(e) => setFormQuestion({ ...formQuestion, question: e.target.value })} placeholder="Contoh: Kapan jadwal mentoring?" rows="2" /></>);
+    } else if (modal.type === "badword") {
+      title = modal.mode === "add" ? "Tambah Kata Kotor" : "Edit Kata Kotor";
+      content = (<><label>Kata Kotor</label><input type="text" value={formBadWord.word} onChange={(e) => setFormBadWord({ word: e.target.value })} placeholder="Contoh: bodoh" /></>);
     }
     return (<div className="modal-overlay" onClick={() => setModal({ open: false })}><div className="modal-content" onClick={(e) => e.stopPropagation()}><h3>{title}</h3><div className="modal-body">{content}</div><div className="modal-buttons"><button className="btn btn-secondary" onClick={() => setModal({ open: false })}>Batal</button><button className="btn btn-primary" onClick={handleModalSubmit}>Simpan</button></div></div></div>);
   };
 
+  // Tombol kembali ke halaman utama
+  const goBack = () => {
+    window.location.href = "/";
+  };
+
   return (
     <div className="admin-container">
+      {/* Tombol Kembali di pojok kanan atas */}
+      <button className="adminButton" onClick={goBack} style={{ position: 'fixed', top: '12px', right: '12px', zIndex: 9999 }}>
+        ← Kembali
+      </button>
+      
       <h1 className="admin-title">ADMIN CONTROL PANEL</h1>
       <div className="navbar">
         <button className={`nav-btn ${activeTab === "training" ? "active" : ""}`} onClick={() => setActiveTab("training")}>TRAINING</button>
         <button className={`nav-btn ${activeTab === "logs" ? "active" : ""}`} onClick={() => setActiveTab("logs")}>LOGS</button>
         <button className={`nav-btn ${activeTab === "data" ? "active" : ""}`} onClick={() => setActiveTab("data")}>DATA</button>
+        <button className={`nav-btn ${activeTab === "badwords" ? "active" : ""}`} onClick={() => setActiveTab("badwords")}>BAD WORDS</button>
       </div>
       {activeTab === "training" && renderTree()}
       {activeTab === "logs" && renderLogs()}
       {activeTab === "data" && renderData()}
+      {activeTab === "badwords" && renderBadWords()}
       {renderModal()}
     </div>
   );
