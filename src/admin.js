@@ -419,8 +419,8 @@ function Admin() {
                 <td>{bw.id}</td>
                 <td>{bw.word}</td>
                 <td>
-                  <button className="btn-icon edit" onClick={() => openEditBadWord(bw)}>✏️ Edit</button>
-                  <button className="btn-icon delete" onClick={() => deleteBadWord(bw.id)}>🗑️ Hapus</button>
+                  <button className="btn-icon edit" onClick={() => openEditBadWord(bw)}> ( Edit ) </button>
+                  <button className="btn-icon delete" onClick={() => deleteBadWord(bw.id)}> ( Hapus ) </button>
                 </td>
               </tr>
             ))
