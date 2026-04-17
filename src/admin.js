@@ -1,4 +1,4 @@
-// Admin.js
+// Admin.js - dengan dukungan import bad_words
 import React, { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 import * as XLSX from "xlsx";
@@ -11,14 +11,14 @@ function Admin() {
   const [intents, setIntents] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [logs, setLogs] = useState([]);
-  const [badWords, setBadWords] = useState([]); // <-- NEW
+  const [badWords, setBadWords] = useState([]);
   const [expandedCats, setExpandedCats] = useState({});
   const [expandedIntents, setExpandedIntents] = useState({});
   const [modal, setModal] = useState({ open: false, type: null, mode: null, data: null });
   const [formCat, setFormCat] = useState({ name: "" });
   const [formIntent, setFormIntent] = useState({ category_id: "", name: "", response: "", emotion: "neutral" });
   const [formQuestion, setFormQuestion] = useState({ intent_id: "", question: "" });
-  const [formBadWord, setFormBadWord] = useState({ word: "" }); // <-- NEW
+  const [formBadWord, setFormBadWord] = useState({ word: "" });
   
   const [importing, setImporting] = useState(false);
   const [importProgress, setImportProgress] = useState("");
@@ -42,7 +42,7 @@ function Admin() {
         axios.get(`${API_BASE_URL}/admin/categories`),
         axios.get(`${API_BASE_URL}/admin/intents`),
         axios.get(`${API_BASE_URL}/admin/questions`),
-        axios.get(`${API_BASE_URL}/admin/bad-words`), // <-- NEW
+        axios.get(`${API_BASE_URL}/admin/bad-words`),
       ]);
       setLogs(l.data);
       setCategories(c.data);
@@ -198,6 +198,11 @@ function Admin() {
         else cleaned.intent_id = null;
         if (cleaned.question) cleaned.question = String(cleaned.question).trim();
       }
+      // TAMBAHKAN: pembersihan untuk bad_words
+      if (type === 'bad_words') {
+        if (cleaned.id !== undefined) cleaned.id = Number(cleaned.id) || undefined;
+        if (cleaned.word) cleaned.word = String(cleaned.word).trim();
+      }
       return cleaned;
     });
   };
@@ -242,20 +247,28 @@ function Admin() {
         let questions = questionsSheet ? XLSX.utils.sheet_to_json(questionsSheet) : [];
         questions = cleanExcelData(questions, 'questions');
         
-        if (categories.length === 0 && intents.length === 0 && questions.length === 0) {
-          throw new Error("File tidak mengandung sheet 'categories', 'intents', atau 'questions' yang valid.");
+        // BACA SHEET bad_words
+        setImportProgress("Memproses sheet bad_words...");
+        const badWordsSheet = workbook.Sheets["bad_words"];
+        let bad_words = badWordsSheet ? XLSX.utils.sheet_to_json(badWordsSheet) : [];
+        bad_words = cleanExcelData(bad_words, 'bad_words');
+        
+        // Validasi: minimal satu sheet memiliki data
+        if (categories.length === 0 && intents.length === 0 && questions.length === 0 && bad_words.length === 0) {
+          throw new Error("File tidak mengandung sheet 'categories', 'intents', 'questions', atau 'bad_words' yang valid.");
         }
         
         setImportProgress("Mengirim data ke server...");
         const response = await axios.post(`${API_BASE_URL}/admin/import-json`, {
           categories,
           intents,
-          questions
+          questions,
+          bad_words   // <-- KIRIMKAN bad_words
         });
         
         if (response.data.success) {
           const stats = response.data.stats;
-          showNotification(`Import berhasil! ${stats.categories} kategori, ${stats.intents} intent, ${stats.questions} pertanyaan diimpor.`);
+          showNotification(`Import berhasil! ${stats.categories} kategori, ${stats.intents} intent, ${stats.questions} pertanyaan, ${stats.bad_words || 0} kata kotor diimpor.`);
           fetchAll();
         } else {
           throw new Error(response.data.error || "Gagal import");
@@ -291,7 +304,6 @@ function Admin() {
     }); 
     setModal({ open: true, type: "question", mode: "edit", data: question }); 
   };
-  // NEW: Bad word modal handlers
   const openAddBadWord = () => { setFormBadWord({ word: "" }); setModal({ open: true, type: "badword", mode: "add", data: null }); };
   const openEditBadWord = (badWord) => { setFormBadWord({ word: badWord.word }); setModal({ open: true, type: "badword", mode: "edit", data: badWord }); };
 
@@ -395,7 +407,6 @@ function Admin() {
     </div>
   );
 
-  // NEW: Render Bad Words table
   const renderBadWords = () => (
     <div className="card">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -449,14 +460,12 @@ function Admin() {
     return (<div className="modal-overlay" onClick={() => setModal({ open: false })}><div className="modal-content" onClick={(e) => e.stopPropagation()}><h3>{title}</h3><div className="modal-body">{content}</div><div className="modal-buttons"><button className="btn btn-secondary" onClick={() => setModal({ open: false })}>Batal</button><button className="btn btn-primary" onClick={handleModalSubmit}>Simpan</button></div></div></div>);
   };
 
-  // Tombol kembali ke halaman utama
   const goBack = () => {
     window.location.href = "/";
   };
 
   return (
     <div className="admin-container">
-      {/* Tombol Kembali di pojok kanan atas */}
       <button className="adminButton" onClick={goBack} style={{ position: 'fixed', top: '12px', right: '12px', zIndex: 9999 }}>
         ← Kembali
       </button>
