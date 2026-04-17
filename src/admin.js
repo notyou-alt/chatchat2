@@ -176,120 +176,133 @@ function Admin() {
   };
 
   // ========== IMPORT EXCEL ==========
-  const cleanExcelData = (data, type) => {
-    return data.map(row => {
-      const cleaned = { ...row };
-      if (type === 'categories') {
-        if (cleaned.id !== undefined) cleaned.id = Number(cleaned.id) || undefined;
-        if (cleaned.name) cleaned.name = String(cleaned.name).trim();
-      }
-      if (type === 'intents') {
-        if (cleaned.id !== undefined) cleaned.id = Number(cleaned.id) || undefined;
-        if (cleaned.category_id !== undefined && cleaned.category_id !== '') cleaned.category_id = Number(cleaned.category_id) || null;
-        else cleaned.category_id = null;
-        if (cleaned.name) cleaned.name = String(cleaned.name).trim();
-        if (cleaned.response) cleaned.response = String(cleaned.response).trim();
-        if (cleaned.emotion) cleaned.emotion = String(cleaned.emotion).trim();
-        if (!cleaned.emotion) cleaned.emotion = "neutral";
-      }
-      if (type === 'questions') {
-        if (cleaned.id !== undefined) cleaned.id = Number(cleaned.id) || undefined;
-        if (cleaned.intent_id !== undefined && cleaned.intent_id !== '') cleaned.intent_id = Number(cleaned.intent_id) || null;
-        else cleaned.intent_id = null;
-        if (cleaned.question) cleaned.question = String(cleaned.question).trim();
-      }
-      // TAMBAHKAN: pembersihan untuk bad_words
-      if (type === 'bad_words') {
-        if (cleaned.id !== undefined) cleaned.id = Number(cleaned.id) || undefined;
-        if (cleaned.word) cleaned.word = String(cleaned.word).trim();
-      }
-      return cleaned;
-    });
-  };
-
-  const importExcel = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const fileExt = file.name.split(".").pop().toLowerCase();
-    if (fileExt !== "xlsx") {
-      showNotification("Hanya file .xlsx yang diperbolehkan", true);
-      e.target.value = "";
-      return;
+ 
+  // ========== IMPORT EXCEL (Perbaikan untuk bad_words) ==========
+const cleanExcelData = (data, type) => {
+  return data.map(row => {
+    const cleaned = { ...row };
+    if (type === 'categories') {
+      if (cleaned.id !== undefined) cleaned.id = Number(cleaned.id) || undefined;
+      if (cleaned.name) cleaned.name = String(cleaned.name).trim();
     }
-    if (file.size > 2 * 1024 * 1024) {
-      showNotification("Ukuran file maksimal 2MB", true);
-      e.target.value = "";
-      return;
+    if (type === 'intents') {
+      if (cleaned.id !== undefined) cleaned.id = Number(cleaned.id) || undefined;
+      if (cleaned.category_id !== undefined && cleaned.category_id !== '') cleaned.category_id = Number(cleaned.category_id) || null;
+      else cleaned.category_id = null;
+      if (cleaned.name) cleaned.name = String(cleaned.name).trim();
+      if (cleaned.response) cleaned.response = String(cleaned.response).trim();
+      if (cleaned.emotion) cleaned.emotion = String(cleaned.emotion).trim();
+      if (!cleaned.emotion) cleaned.emotion = "neutral";
     }
+    if (type === 'questions') {
+      if (cleaned.id !== undefined) cleaned.id = Number(cleaned.id) || undefined;
+      if (cleaned.intent_id !== undefined && cleaned.intent_id !== '') cleaned.intent_id = Number(cleaned.intent_id) || null;
+      else cleaned.intent_id = null;
+      if (cleaned.question) cleaned.question = String(cleaned.question).trim();
+    }
+    // PERBAIKAN: bad_words
+    if (type === 'bad_words') {
+      if (cleaned.id !== undefined) cleaned.id = Number(cleaned.id) || undefined;
+      if (cleaned.word) cleaned.word = String(cleaned.word).trim().toLowerCase();
+      // Hapus properti kosong dari Excel
+      delete cleaned['__EMPTY'];
+    }
+    return cleaned;
+  });
+};
 
-    setImporting(true);
-    setImportProgress("Membaca file...");
+const importExcel = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      try {
-        const data = new Uint8Array(evt.target.result);
-        const workbook = XLSX.read(data, { type: "array" });
-        
-        setImportProgress("Memproses sheet categories...");
-        const categoriesSheet = workbook.Sheets["categories"];
-        let categories = categoriesSheet ? XLSX.utils.sheet_to_json(categoriesSheet) : [];
-        categories = cleanExcelData(categories, 'categories');
-        
-        setImportProgress("Memproses sheet intents...");
-        const intentsSheet = workbook.Sheets["intents"];
-        let intents = intentsSheet ? XLSX.utils.sheet_to_json(intentsSheet) : [];
-        intents = cleanExcelData(intents, 'intents');
-        
-        setImportProgress("Memproses sheet questions...");
-        const questionsSheet = workbook.Sheets["questions"];
-        let questions = questionsSheet ? XLSX.utils.sheet_to_json(questionsSheet) : [];
-        questions = cleanExcelData(questions, 'questions');
-        
-        // BACA SHEET bad_words
-        setImportProgress("Memproses sheet bad_words...");
-        const badWordsSheet = workbook.Sheets["bad_words"];
-        let bad_words = badWordsSheet ? XLSX.utils.sheet_to_json(badWordsSheet) : [];
-        bad_words = cleanExcelData(bad_words, 'bad_words');
-        
-        // Validasi: minimal satu sheet memiliki data
-        if (categories.length === 0 && intents.length === 0 && questions.length === 0 && bad_words.length === 0) {
-          throw new Error("File tidak mengandung sheet 'categories', 'intents', 'questions', atau 'bad_words' yang valid.");
+  const fileExt = file.name.split(".").pop().toLowerCase();
+  if (fileExt !== "xlsx") {
+    showNotification("Hanya file .xlsx yang diperbolehkan", true);
+    e.target.value = "";
+    return;
+  }
+  if (file.size > 2 * 1024 * 1024) {
+    showNotification("Ukuran file maksimal 2MB", true);
+    e.target.value = "";
+    return;
+  }
+
+  setImporting(true);
+  setImportProgress("Membaca file...");
+
+  const reader = new FileReader();
+  reader.onload = async (evt) => {
+    try {
+      const data = new Uint8Array(evt.target.result);
+      const workbook = XLSX.read(data, { type: "array" });
+      
+      setImportProgress("Memproses sheet categories...");
+      const categoriesSheet = workbook.Sheets["categories"];
+      let categories = categoriesSheet ? XLSX.utils.sheet_to_json(categoriesSheet) : [];
+      categories = cleanExcelData(categories, 'categories');
+      
+      setImportProgress("Memproses sheet intents...");
+      const intentsSheet = workbook.Sheets["intents"];
+      let intents = intentsSheet ? XLSX.utils.sheet_to_json(intentsSheet) : [];
+      intents = cleanExcelData(intents, 'intents');
+      
+      setImportProgress("Memproses sheet questions...");
+      const questionsSheet = workbook.Sheets["questions"];
+      let questions = questionsSheet ? XLSX.utils.sheet_to_json(questionsSheet) : [];
+      questions = cleanExcelData(questions, 'questions');
+      
+      // BACA SHEET bad_words
+      setImportProgress("Memproses sheet bad_words...");
+      const badWordsSheet = workbook.Sheets["bad_words"];
+      let bad_words = badWordsSheet ? XLSX.utils.sheet_to_json(badWordsSheet) : [];
+      bad_words = cleanExcelData(bad_words, 'bad_words');
+      
+      // Jika tidak ada ID, generate ID negatif unik (agar tidak bentrok dengan auto-increment)
+      let nextId = -1;
+      bad_words = bad_words.map(bw => {
+        if (!bw.id || isNaN(bw.id)) {
+          bw.id = nextId--;
         }
-        
-        setImportProgress("Mengirim data ke server...");
-        const response = await axios.post(`${API_BASE_URL}/admin/import-json`, {
-          categories,
-          intents,
-          questions,
-          bad_words   // <-- KIRIMKAN bad_words
-        });
-        
-        if (response.data.success) {
-          const stats = response.data.stats;
-          showNotification(`Import berhasil! ${stats.categories} kategori, ${stats.intents} intent, ${stats.questions} pertanyaan, ${stats.bad_words || 0} kata kotor diimpor.`);
-          fetchAll();
-        } else {
-          throw new Error(response.data.error || "Gagal import");
-        }
-      } catch (err) {
-        console.error(err);
-        showNotification(err.message || "Gagal mengimpor file", true);
-      } finally {
-        setImporting(false);
-        setImportProgress("");
-        e.target.value = "";
+        return bw;
+      });
+      
+      // Validasi: minimal satu sheet memiliki data
+      if (categories.length === 0 && intents.length === 0 && questions.length === 0 && bad_words.length === 0) {
+        throw new Error("File tidak mengandung sheet 'categories', 'intents', 'questions', atau 'bad_words' yang valid.");
       }
-    };
-    reader.onerror = () => {
-      showNotification("Gagal membaca file", true);
+      
+      setImportProgress("Mengirim data ke server...");
+      const response = await axios.post(`${API_BASE_URL}/admin/import-json`, {
+        categories,
+        intents,
+        questions,
+        bad_words
+      });
+      
+      if (response.data.success) {
+        const stats = response.data.stats;
+        showNotification(`Import berhasil! ${stats.categories} kategori, ${stats.intents} intent, ${stats.questions} pertanyaan, ${stats.bad_words || 0} kata kotor diimpor.`);
+        fetchAll();
+      } else {
+        throw new Error(response.data.error || "Gagal import");
+      }
+    } catch (err) {
+      console.error(err);
+      showNotification(err.message || "Gagal mengimpor file", true);
+    } finally {
       setImporting(false);
       setImportProgress("");
       e.target.value = "";
-    };
-    reader.readAsArrayBuffer(file);
+    }
   };
+  reader.onerror = () => {
+    showNotification("Gagal membaca file", true);
+    setImporting(false);
+    setImportProgress("");
+    e.target.value = "";
+  };
+  reader.readAsArrayBuffer(file);
+};
 
   // ========== MODAL HANDLERS ==========
   const openAddCategory = () => { setFormCat({ name: "" }); setModal({ open: true, type: "category", mode: "add", data: null }); };
